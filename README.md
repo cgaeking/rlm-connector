@@ -1,5 +1,13 @@
 # RLM Knowledge Base
 
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)]()
+
+[🇬🇧 English Version](README.en.md)
+
 > **Recursive Language Model (RLM)** - Eine intelligente Dokumenten-Wissensdatenbank, die LLM-Agents direkten Zugriff auf Unternehmensdokumente gibt.
 
 ## Was ist das?
