@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  rlm-knowledge-base:
+    build: .
+    container_name: rlm-knowledge-base
+    ports:
+      - "8000:8000"   # API
+      - "7860:7860"   # Chat UI
+    volumes:
+      # Configuration
+      - ./config.yaml:/app/config.yaml:ro
+
+      # Database persistence
+      - ./data:/app/data
+
+      # Document sources (adjust paths as needed)
+      # - /path/to/your/documents:/mnt/documents:ro
+      # - /mnt/onedrive:/mnt/onedrive:ro
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # Alternative LLM providers:
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # - OLLAMA_URL=http://host.docker.internal:11434
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: rclone for OneDrive/Google Drive mount
+  # Uncomment and configure if you need cloud storage access
+  #
+  # rclone:
+  #   image: rclone/rclone:latest
+  #   container_name: rclone-mount
+  #   command: mount onedrive: /data --vfs-cache-mode full --allow-other
+  #   volumes:
+  #     - ./rclone.conf:/config/rclone/rclone.conf:ro
+  #     - onedrive_data:/data:shared
+  #   devices:
+  #     - /dev/fuse
+  #   cap_add:
+  #     - SYS_ADMIN
+  #   security_opt:
+  #     - apparmor:unconfined
+  #   restart: unless-stopped
+
+# volumes:
+#   onedrive_data:

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile:*)",
+      "Bash(pip show:*)",
+      "Bash(python:*)",
+      "Bash(.venvScriptspython -m src.main --config config.yaml rebuild-trigrams)",
+      "Bash(test:*)"
+    ]
+  }
+}

@@ -1,0 +1,103 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rlm-knowledge-base"
+version = "0.1.0"
+description = "A minimalist service that makes company documents accessible to RLM-based AI agents"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "Christian" }
+]
+keywords = ["rlm", "knowledge-base", "ai", "documents", "rag"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    # Core
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.23.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "sqlalchemy>=2.0.0",
+    "aiosqlite>=0.19.0",
+
+    # Document Parsing
+    "python-magic-bin>=0.4.14;platform_system=='Windows'",
+    "python-magic>=0.4.27;platform_system!='Windows'",
+    "pypdf>=3.0.0",
+    "python-docx>=0.8.11",
+    "openpyxl>=3.1.0",
+    "python-pptx>=0.6.21",
+
+    # LLM
+    "anthropic>=0.25.0",
+
+    # MCP Server
+    "mcp>=1.0.0",
+
+    # UI
+    "gradio>=4.0.0",
+
+    # Utils
+    "pyyaml>=6.0.0",
+    "python-dotenv>=1.0.0",
+    "apscheduler>=3.10.0",
+    "aiofiles>=23.0.0",
+    "watchfiles>=0.21.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+ocr = [
+    "pytesseract>=0.3.10",
+    "pdf2image>=1.16.0",
+]
+
+openai = [
+    "openai>=1.0.0",
+]
+
+ollama = [
+    "ollama>=0.1.0",
+]
+
+[project.scripts]
+rlm-kb = "src.main:main"
+rlm-mcp = "src.mcp_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true

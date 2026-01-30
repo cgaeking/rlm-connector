@@ -1,0 +1,68 @@
+# RLM Knowledge Base Configuration
+# Copy this file to config.yaml and adjust values as needed
+
+# LLM Provider
+llm:
+  provider: anthropic  # anthropic, openai, ollama
+  model: claude-sonnet-4-20250514
+  # For Ollama:
+  # provider: ollama
+  # model: llama3
+  # base_url: http://localhost:11434
+
+# Database
+database:
+  type: sqlite  # sqlite, postgresql
+  path: ./data/index.db
+  # For PostgreSQL:
+  # type: postgresql
+  # url: postgresql://user:pass@localhost:5432/rlm_kb
+
+# Connectors - Define your document sources
+connectors:
+  - name: local_documents
+    type: local
+    path: ./test_documents  # Change to your documents folder,  on Windows: C:/Users/chris/Documents for example
+    include:
+      - "*.pdf"
+      - "*.docx"
+      - "*.doc"
+      - "*.xlsx"
+      - "*.xls"
+      - "*.pptx"
+      - "*.txt"
+      - "*.md"
+    exclude:
+      - ".*"           # Hidden files
+      - "~$*"          # Office temp files
+      - "node_modules"
+      - "__pycache__"
+      - "*.tmp"
+  
+  # JUST repeat from "- name..." on for more directorieess you want to index
+
+# Indexer Settings
+indexer:
+  # Scheduled Sync (Cron syntax) - null for manual only
+  sync_schedule: "0 3 * * *"  # Daily at 3:00 AM
+
+  # Max file size to index (MB)
+  max_file_size_mb: 50
+
+  # Parallel indexing workers
+  max_concurrent: 5
+
+  # Summary generation settings
+  summary:
+    max_content_length: 10000  # Characters for LLM input
+    language: de
+
+# API Server
+api:
+  host: 0.0.0.0
+  port: 8000
+
+# Chat UI (Gradio)
+ui:
+  enabled: true
+  port: 7860
