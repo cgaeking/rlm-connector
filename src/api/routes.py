@@ -82,6 +82,47 @@ class ConfigBody(BaseModel):
     indexer: IndexerBody = Field(default_factory=IndexerBody)
 
 
+class LlmModelsRequest(BaseModel):
+    """Optional overrides for listing models (otherwise config values are used)."""
+
+    provider: str | None = None
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+def _list_chat_models(provider: str, api_key: str | None, base_url: str | None) -> list[str]:
+    """Return available chat model IDs for a provider (best-effort, filtered)."""
+    if provider == "anthropic":
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=api_key)
+        return [m.id for m in client.models.list(limit=100).data if m.id.startswith("claude")]
+
+    if provider == "openai":
+        import openai
+
+        client = openai.OpenAI(api_key=api_key)
+        skip = ("instruct", "audio", "realtime", "transcribe", "tts", "search", "embedding")
+        models = [
+            m.id
+            for m in client.models.list().data
+            if m.id.startswith(("gpt-", "o1", "o3", "o4", "chatgpt"))
+            and not any(s in m.id for s in skip)
+        ]
+        return sorted(set(models))
+
+    if provider == "ollama":
+        import json
+        import urllib.request
+
+        url = (base_url or "http://localhost:11434").rstrip("/") + "/api/tags"
+        with urllib.request.urlopen(url, timeout=5) as resp:  # noqa: S310
+            data = json.load(resp)
+        return [m["name"] for m in data.get("models", [])]
+
+    raise ValueError(f"Unbekannter Provider: {provider}")
+
+
 def create_router(app_state: Any) -> APIRouter:
     """Create API router with all endpoints.
 
@@ -318,15 +359,45 @@ def create_router(app_state: Any) -> APIRouter:
 
     @router.post("/config", tags=["Config"])
     def update_config_endpoint(body: ConfigBody):
-        """Persist the editable config to config.yaml.
+        """Persist the editable config to config.yaml and apply it live.
 
-        Validates and writes the file (with a .bak backup). Does NOT hot-apply:
-        the backend must be restarted for changes to take effect.
+        Validates and writes the file (with a .bak backup), then reloads the
+        config-dependent state in-process so changes take effect immediately
+        (no restart). If the live reload fails, the change is still saved and a
+        restart would apply it.
         """
         try:
             save_config(body.model_dump())
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid config: {str(e)}")
-        return {"ok": True, "restart_required": True}
+
+        try:
+            from .app import reload_app_state
+
+            reload_app_state()
+        except Exception as e:
+            return {"ok": True, "reloaded": False, "restart_required": True, "detail": str(e)}
+
+        return {"ok": True, "reloaded": True, "restart_required": False}
+
+    @router.post("/llm/models", tags=["Config"])
+    def list_llm_models(body: LlmModelsRequest | None = None):
+        """List available chat models for a provider.
+
+        Uses the provider/api_key/base_url from the request if given, otherwise
+        falls back to the saved config. Lets the UI populate a model dropdown.
+        """
+        cfg = get_config()
+        provider = (body.provider if body and body.provider else None) or cfg.llm.provider
+        api_key = (body.api_key if body and body.api_key else None) or cfg.llm.api_key
+        base_url = (body.base_url if body and body.base_url else None) or cfg.llm.base_url
+        try:
+            models = _list_chat_models(provider, api_key, base_url)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Modelle konnten nicht geladen werden: {str(e)}",
+            )
+        return {"provider": provider, "models": models}
 
     return router

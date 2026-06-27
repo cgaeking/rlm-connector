@@ -101,6 +101,49 @@ async def lifespan(app: FastAPI):
     print("RLM Knowledge Base shutdown")
 
 
+def reload_app_state() -> None:
+    """Reload config from disk and rebuild config-dependent state in place.
+
+    Lets configuration changes (LLM, connectors, schedule) take effect without
+    restarting the process. Mutates the shared ``app_state`` object so the
+    existing route handlers immediately see the new values.
+    """
+    from ..config import init_config
+    from ..rlm_engine.engine import KnowledgeBaseEngine
+
+    # Stop the running scheduler before swapping things out.
+    try:
+        if getattr(app_state, "sync_manager", None):
+            app_state.sync_manager.shutdown_scheduler()
+    except Exception as e:
+        print(f"Warning: scheduler shutdown during reload failed: {e}")
+
+    config = init_config()
+    app_state.config = config
+
+    if config.database.type == "postgresql" and config.database.url:
+        app_state.db = DocumentRepository(config.database.url)
+    else:
+        app_state.db = DocumentRepository(config.database.path)
+
+    app_state.connectors = create_connectors(config)
+    app_state.indexer = Indexer(
+        db=app_state.db, connectors=app_state.connectors, config=config
+    )
+    app_state.sync_manager = SyncManager(
+        db=app_state.db,
+        connectors=app_state.connectors,
+        config=config,
+        indexer=app_state.indexer,
+    )
+    app_state.rlm_engine = KnowledgeBaseEngine(
+        db=app_state.db, connectors=app_state.connectors, config=config
+    )
+
+    app_state.sync_manager.setup_scheduler()
+    print(f"RLM Knowledge Base config reloaded ({len(app_state.connectors)} connector(s))")
+
+
 def create_app(config: AppConfig | None = None) -> FastAPI:
     """Create FastAPI application instance.
 
