@@ -66,6 +66,8 @@ class Document(Base):
         Index("idx_documents_status", "status"),
         Index("idx_documents_file_type", "file_type"),
         Index("idx_documents_file_name", "file_name"),
+        # Speeds up "recently indexed" queries (ORDER BY indexed_at DESC).
+        Index("idx_documents_indexed_at", "indexed_at"),
     )
 
     def to_dict(self, include_content: bool = False) -> dict[str, Any]:

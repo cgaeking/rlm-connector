@@ -123,6 +123,12 @@ class DocumentRepository:
                 CREATE INDEX IF NOT EXISTS idx_doc_id_trigrams ON document_trigrams(doc_id)
             """))
 
+            # Index for "recently indexed" queries (ORDER BY indexed_at DESC).
+            # create_all() won't add indexes to a pre-existing table, so ensure it here.
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_documents_indexed_at ON documents(indexed_at)
+            """))
+
             conn.commit()
 
     def _get_session(self) -> Session:
