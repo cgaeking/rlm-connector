@@ -73,6 +73,7 @@ class IndexerBody(BaseModel):
     """Editable indexer settings (include/exclude are global file patterns)."""
 
     sync_schedule: str | None = None
+    sync_interval_hours: int = 24
     include: list[str] = Field(default_factory=list)
     exclude: list[str] = Field(default_factory=list)
 
@@ -360,6 +361,7 @@ def create_router(app_state: Any) -> APIRouter:
             ],
             indexer=IndexerBody(
                 sync_schedule=cfg.indexer.sync_schedule,
+                sync_interval_hours=cfg.indexer.sync_interval_hours,
                 include=cfg.indexer.include,
                 exclude=cfg.indexer.exclude,
             ),

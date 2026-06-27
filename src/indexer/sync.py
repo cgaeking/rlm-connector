@@ -178,22 +178,30 @@ class SyncManager:
     def setup_scheduler(self) -> None:
         """Setup APScheduler for automatic sync.
 
-        Uses cron schedule from config.
+        Prefers a fixed interval (config.indexer.sync_interval_hours); falls back
+        to the cron schedule (config.indexer.sync_schedule) if no interval is set.
+        Runs an initial sync shortly after startup.
         """
+        interval_hours = getattr(self.config.indexer, "sync_interval_hours", None)
         schedule = self.config.indexer.sync_schedule
-        if not schedule:
-            logger.info("No sync schedule configured, skipping scheduler setup")
-            return
 
         try:
+            from datetime import datetime, timedelta
+
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
-            from apscheduler.triggers.cron import CronTrigger
 
             self._scheduler = AsyncIOScheduler()
+            trigger = None
 
-            # Parse cron expression (minute hour day month day_of_week)
-            parts = schedule.split()
-            if len(parts) == 5:
+            if interval_hours and interval_hours > 0:
+                from apscheduler.triggers.interval import IntervalTrigger
+
+                trigger = IntervalTrigger(hours=interval_hours)
+                desc = f"every {interval_hours}h"
+            elif schedule and len(schedule.split()) == 5:
+                from apscheduler.triggers.cron import CronTrigger
+
+                parts = schedule.split()
                 trigger = CronTrigger(
                     minute=parts[0],
                     hour=parts[1],
@@ -201,18 +209,22 @@ class SyncManager:
                     month=parts[3],
                     day_of_week=parts[4],
                 )
-
-                self._scheduler.add_job(
-                    self._scheduled_sync,
-                    trigger,
-                    id="scheduled_sync",
-                    name="Scheduled Index Sync",
-                )
-
-                self._scheduler.start()
-                logger.info(f"Scheduler started with schedule: {schedule}")
+                desc = f"cron {schedule}"
             else:
-                logger.error(f"Invalid cron schedule: {schedule}")
+                logger.info("No sync interval/schedule configured, skipping scheduler setup")
+                return
+
+            self._scheduler.add_job(
+                self._scheduled_sync,
+                trigger,
+                id="scheduled_sync",
+                name="Scheduled Index Sync",
+                # Run a first sync ~30s after start so new folders get indexed soon.
+                next_run_time=datetime.now() + timedelta(seconds=30),
+                replace_existing=True,
+            )
+            self._scheduler.start()
+            logger.info(f"Scheduler started: {desc} (initial sync in ~30s)")
 
         except ImportError:
             logger.warning("APScheduler not installed, scheduled sync disabled")

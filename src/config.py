@@ -52,6 +52,9 @@ class IndexerConfig(BaseModel):
     """Indexer configuration."""
 
     sync_schedule: str | None = "0 3 * * *"
+    # Automatic re-index interval in hours (default: once a day). Takes precedence
+    # over sync_schedule when > 0.
+    sync_interval_hours: int = 24
     max_file_size_mb: int = 50
     max_concurrent: int = 5
     # Global file patterns applied to every indexed folder.
@@ -198,6 +201,8 @@ def save_config(data: dict, config_path: str | Path | None = None) -> AppConfig:
         raw.setdefault("indexer", {})
         if "sync_schedule" in data["indexer"]:
             raw["indexer"]["sync_schedule"] = data["indexer"]["sync_schedule"]
+        if data["indexer"].get("sync_interval_hours") is not None:
+            raw["indexer"]["sync_interval_hours"] = data["indexer"]["sync_interval_hours"]
         if data["indexer"].get("include") is not None:
             raw["indexer"]["include"] = data["indexer"]["include"]
         if data["indexer"].get("exclude") is not None:
