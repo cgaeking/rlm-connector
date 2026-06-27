@@ -109,14 +109,14 @@ def create_router(app_state: Any) -> APIRouter:
         return {"status": "healthy"}
 
     @router.get("/status", response_model=StatusResponse, tags=["Status"])
-    async def get_status():
+    def get_status():
         """Get system status including sync status and document counts."""
         return app_state.sync_manager.get_status()
 
     # Document endpoints
 
     @router.get("/documents", tags=["Documents"])
-    async def list_documents(
+    def list_documents(
         connector_name: str | None = Query(None, description="Filter by connector"),
         file_type: str | None = Query(None, description="Filter by file type"),
         search_filename: str | None = Query(None, description="Search in file names"),
@@ -140,7 +140,7 @@ def create_router(app_state: Any) -> APIRouter:
         }
 
     @router.get("/documents/{doc_id}", tags=["Documents"])
-    async def get_document(doc_id: str):
+    def get_document(doc_id: str):
         """Get document details by ID."""
         doc = app_state.db.get_document(doc_id)
         if not doc:
@@ -148,7 +148,7 @@ def create_router(app_state: Any) -> APIRouter:
         return doc.to_dict()
 
     @router.get("/documents/{doc_id}/content", tags=["Documents"])
-    async def get_document_content(
+    def get_document_content(
         doc_id: str,
         start: int | None = Query(None, description="Start character position"),
         end: int | None = Query(None, description="End character position"),
@@ -160,14 +160,14 @@ def create_router(app_state: Any) -> APIRouter:
         return result
 
     @router.get("/statistics", tags=["Documents"])
-    async def get_statistics():
+    def get_statistics():
         """Get database statistics."""
         return app_state.db.get_statistics()
 
     # Search endpoint (FTS5)
 
     @router.post("/search", tags=["Search"])
-    async def search_documents(request: SearchRequest):
+    def search_documents(request: SearchRequest):
         """Full-text search across all documents using FTS5."""
         results = app_state.db.search_fulltext(
             query=request.query,
@@ -182,7 +182,7 @@ def create_router(app_state: Any) -> APIRouter:
         }
 
     @router.get("/search", tags=["Search"])
-    async def search_documents_get(
+    def search_documents_get(
         q: str = Query(..., description="Search query"),
         file_type: str | None = Query(None, description="Filter by file type"),
         limit: int = Query(20, ge=1, le=100, description="Maximum results"),
@@ -236,7 +236,7 @@ def create_router(app_state: Any) -> APIRouter:
             }
 
     @router.get("/index/status", tags=["Index"])
-    async def get_index_status():
+    def get_index_status():
         """Get current index/sync status."""
         return app_state.sync_manager.get_status()
 
@@ -248,7 +248,7 @@ def create_router(app_state: Any) -> APIRouter:
     # Connector endpoints
 
     @router.get("/connectors", tags=["Connectors"])
-    async def list_connectors():
+    def list_connectors():
         """List all configured connectors."""
         connectors = []
         for name, connector in app_state.connectors.items():
@@ -256,7 +256,7 @@ def create_router(app_state: Any) -> APIRouter:
         return {"connectors": connectors}
 
     @router.get("/connectors/{connector_name}", tags=["Connectors"])
-    async def get_connector(connector_name: str):
+    def get_connector(connector_name: str):
         """Get connector details."""
         connector = app_state.connectors.get(connector_name)
         if not connector:
@@ -317,7 +317,7 @@ def create_router(app_state: Any) -> APIRouter:
         )
 
     @router.post("/config", tags=["Config"])
-    async def update_config_endpoint(body: ConfigBody):
+    def update_config_endpoint(body: ConfigBody):
         """Persist the editable config to config.yaml.
 
         Validates and writes the file (with a .bak backup). Does NOT hot-apply:
