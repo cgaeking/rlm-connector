@@ -130,7 +130,12 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
         Loaded AppConfig instance.
     """
     settings = Settings()
-    path = Path(config_path) if config_path else (app_home() / settings.config_path)
+    # Resolve a relative config path under the app home (RLM_HOME) so loading and
+    # saving always hit the same file, even when a default name like "config.yaml"
+    # is passed in explicitly.
+    path = Path(config_path or settings.config_path)
+    if not path.is_absolute():
+        path = app_home() / path
 
     data = {}
     if path.exists():
@@ -190,7 +195,9 @@ def save_config(data: dict, config_path: str | Path | None = None) -> AppConfig:
         The validated :class:`AppConfig`.
     """
     settings = Settings()
-    path = Path(config_path) if config_path else (app_home() / settings.config_path)
+    path = Path(config_path or settings.config_path)
+    if not path.is_absolute():
+        path = app_home() / path
     path.parent.mkdir(parents=True, exist_ok=True)
 
     # Start from the existing file so untouched sections survive.
