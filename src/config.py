@@ -12,7 +12,7 @@ class LLMConfig(BaseModel):
     """LLM provider configuration."""
 
     provider: str = "anthropic"
-    model: str = "claude-sonnet-4-20250514"
+    model: str = "claude-sonnet-4-6"
     base_url: str | None = None
     api_key: str | None = None
 

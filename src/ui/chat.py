@@ -325,6 +325,7 @@ def launch_ui(
     """
     demo = create_chat_ui(engine, db, sync_manager)
     demo.launch(
+        server_name="127.0.0.1",
         server_port=port,
         share=share,
         show_error=True,
