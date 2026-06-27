@@ -170,6 +170,9 @@ class KnowledgeBaseEngine:
         self.connectors = connectors
         self.config = config
         self._client = None
+        # Doc ids surfaced via search/list during the current query (used as
+        # fallback sources when the model lists documents without reading them).
+        self._referenced_ids: list[str] = []
 
     def _get_client(self):
         """Get or create the LLM client."""
@@ -245,6 +248,7 @@ class KnowledgeBaseEngine:
             limit=limit,
             file_type=file_type
         )
+        self._referenced_ids.extend(r["doc_id"] for r in results)
 
         if not results:
             return f"Keine Treffer für '{query}'"
@@ -277,6 +281,7 @@ Snippet: {r['snippet']}
             file_type=file_type,
             min_similarity=min_similarity
         )
+        self._referenced_ids.extend(r["doc_id"] for r in results)
 
         if not results:
             return f"Keine Fuzzy-Treffer für '{query}' (Ähnlichkeit >= {min_similarity*100:.0f}%)"
@@ -307,6 +312,10 @@ Snippet: {r['snippet']}
             search_filename=search_filename,
             limit=limit
         )
+        # Only count as sources when the list was filtered (a targeted lookup),
+        # not a full unfiltered dump of the whole index.
+        if file_type or search_filename:
+            self._referenced_ids.extend(d["doc_id"] for d in docs)
 
         if not docs:
             return "Keine Dokumente gefunden."
@@ -413,6 +422,7 @@ Nach Dateityp:
         messages = [{"role": "user", "content": question}]
         total_tokens = 0
         tool_calls_made = []
+        self._referenced_ids = []
 
         for iteration in range(max_iterations):
             logger.info(f"RLM iteration {iteration + 1}")
@@ -436,7 +446,7 @@ Nach Dateityp:
                         if hasattr(block, "text"):
                             answer += block.text
 
-                    sources = self._extract_sources(tool_calls_made)
+                    sources = self._extract_sources(tool_calls_made, answer)
                     return {
                         "answer": answer,
                         "sources": sources,
@@ -525,10 +535,19 @@ Nach Dateityp:
         title = " ".join(title.strip().strip('"').strip().split())
         return title[:80]
 
-    def _extract_sources(self, tool_calls: list[dict]) -> list[dict[str, Any]]:
-        """Extract document references from tool calls."""
-        sources = []
-        seen_ids = set()
+    def _extract_sources(self, tool_calls: list[dict], answer: str = "") -> list[dict[str, Any]]:
+        """Extract document references for the answer.
+
+        Documents the model actually read are the precise sources. If it only
+        searched/listed (e.g. an overview answer), fall back to the surfaced
+        documents — preferring those whose file name appears in the answer text,
+        so unrelated search hits are filtered out.
+        """
+        def as_source(doc) -> dict[str, Any]:
+            return {"id": doc.id, "file_name": doc.file_name, "file_path": doc.file_path}
+
+        sources: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
 
         for call in tool_calls:
             if call["tool"] == "read_document":
@@ -536,17 +555,26 @@ Nach Dateityp:
                 if doc_id and doc_id not in seen_ids:
                     doc = self.db.get_document(doc_id)
                     if doc:
-                        sources.append({
-                            "id": doc.id,
-                            "file_name": doc.file_name,
-                            "file_path": doc.file_path,
-                        })
+                        sources.append(as_source(doc))
                         seen_ids.add(doc_id)
-            elif call["tool"] == "search_documents":
-                # Could also track searched documents
-                pass
 
-        return sources
+        if sources:
+            return sources
+
+        # Fallback: documents surfaced via search/list.
+        candidates = []
+        for doc_id in self._referenced_ids:
+            if doc_id in seen_ids:
+                continue
+            seen_ids.add(doc_id)
+            doc = self.db.get_document(doc_id)
+            if doc:
+                candidates.append(doc)
+
+        ans = (answer or "").lower()
+        mentioned = [d for d in candidates if d.file_name and d.file_name.lower() in ans]
+        chosen = mentioned if mentioned else candidates
+        return [as_source(d) for d in chosen[:30]]
 
     # Legacy methods for backwards compatibility
     def read_document(self, doc_id: str) -> str:
