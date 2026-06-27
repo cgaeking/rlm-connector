@@ -36,8 +36,9 @@ class ConnectorConfig(BaseModel):
     path: str | None = None
     mount_path: str | None = None
     use_api: bool = False
-    include: list[str] = Field(default_factory=lambda: ["*.pdf", "*.docx", "*.xlsx", "*.md", "*.txt"])
-    exclude: list[str] = Field(default_factory=lambda: [".*", "~$*", "node_modules", "__pycache__"])
+    # None -> inherit the global indexer.include / indexer.exclude patterns.
+    include: list[str] | None = None
+    exclude: list[str] | None = None
 
 
 class SummaryConfig(BaseModel):
@@ -53,6 +54,9 @@ class IndexerConfig(BaseModel):
     sync_schedule: str | None = "0 3 * * *"
     max_file_size_mb: int = 50
     max_concurrent: int = 5
+    # Global file patterns applied to every indexed folder.
+    include: list[str] = Field(default_factory=lambda: ["*.pdf", "*.docx", "*.xlsx", "*.md", "*.txt"])
+    exclude: list[str] = Field(default_factory=lambda: [".*", "~$*", "node_modules", "__pycache__"])
     summary: SummaryConfig = Field(default_factory=SummaryConfig)
 
 
@@ -107,12 +111,23 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     settings = Settings()
     path = Path(config_path or settings.config_path)
 
+    data = {}
     if path.exists():
         with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-        config = AppConfig.model_validate(data)
-    else:
-        config = AppConfig()
+    config = AppConfig.model_validate(data)
+
+    # Migrate: seed the global include/exclude from existing connector patterns
+    # when they are not set explicitly in the file (preserves prior file types).
+    indexer_raw = data.get("indexer") or {}
+    if "include" not in indexer_raw:
+        seed = next((c.include for c in config.connectors if c.include), None)
+        if seed:
+            config.indexer.include = seed
+    if "exclude" not in indexer_raw:
+        seed = next((c.exclude for c in config.connectors if c.exclude), None)
+        if seed:
+            config.indexer.exclude = seed
 
     # Normalize per-provider keys. Seed from the legacy single api_key and from
     # environment variables, then expose the active provider's key as api_key.
@@ -169,20 +184,24 @@ def save_config(data: dict, config_path: str | Path | None = None) -> AppConfig:
         raw["llm"]["api_key"] = (raw["llm"].get("api_keys") or {}).get(prov)
 
     if "connectors" in data and data["connectors"] is not None:
-        raw["connectors"] = [
-            {
-                "name": c["name"],
-                "type": c.get("type", "local"),
-                "path": c.get("path"),
-                "include": c.get("include", []),
-                "exclude": c.get("exclude", []),
-            }
-            for c in data["connectors"]
-        ]
+        new_conns = []
+        for c in data["connectors"]:
+            entry = {"name": c["name"], "type": c.get("type", "local"), "path": c.get("path")}
+            if c.get("include") is not None:
+                entry["include"] = c["include"]
+            if c.get("exclude") is not None:
+                entry["exclude"] = c["exclude"]
+            new_conns.append(entry)
+        raw["connectors"] = new_conns
 
-    if "indexer" in data and data["indexer"] is not None and "sync_schedule" in data["indexer"]:
+    if "indexer" in data and data["indexer"] is not None:
         raw.setdefault("indexer", {})
-        raw["indexer"]["sync_schedule"] = data["indexer"]["sync_schedule"]
+        if "sync_schedule" in data["indexer"]:
+            raw["indexer"]["sync_schedule"] = data["indexer"]["sync_schedule"]
+        if data["indexer"].get("include") is not None:
+            raw["indexer"]["include"] = data["indexer"]["include"]
+        if data["indexer"].get("exclude") is not None:
+            raw["indexer"]["exclude"] = data["indexer"]["exclude"]
 
     # Validate the full merged config before touching disk.
     config = AppConfig.model_validate(raw)

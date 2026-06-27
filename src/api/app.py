@@ -36,8 +36,12 @@ def create_connectors(config: AppConfig) -> dict:
                 connector = LocalConnector(
                     name=connector_config.name,
                     root_path=connector_config.path,
-                    include_patterns=connector_config.include,
-                    exclude_patterns=connector_config.exclude,
+                    include_patterns=connector_config.include
+                    if connector_config.include is not None
+                    else config.indexer.include,
+                    exclude_patterns=connector_config.exclude
+                    if connector_config.exclude is not None
+                    else config.indexer.exclude,
                 )
                 connectors[connector_config.name] = connector
             except Exception as e:

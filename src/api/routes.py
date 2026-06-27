@@ -65,14 +65,16 @@ class ConnectorBody(BaseModel):
     name: str
     type: str = "local"
     path: str | None = None
-    include: list[str] = Field(default_factory=list)
-    exclude: list[str] = Field(default_factory=list)
+    include: list[str] | None = None
+    exclude: list[str] | None = None
 
 
 class IndexerBody(BaseModel):
-    """Editable indexer settings."""
+    """Editable indexer settings (include/exclude are global file patterns)."""
 
     sync_schedule: str | None = None
+    include: list[str] = Field(default_factory=list)
+    exclude: list[str] = Field(default_factory=list)
 
 
 class ConfigBody(BaseModel):
@@ -356,7 +358,11 @@ def create_router(app_state: Any) -> APIRouter:
                 )
                 for c in cfg.connectors
             ],
-            indexer=IndexerBody(sync_schedule=cfg.indexer.sync_schedule),
+            indexer=IndexerBody(
+                sync_schedule=cfg.indexer.sync_schedule,
+                include=cfg.indexer.include,
+                exclude=cfg.indexer.exclude,
+            ),
         )
 
     @router.post("/config", tags=["Config"])
