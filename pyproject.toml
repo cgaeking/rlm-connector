@@ -80,6 +80,7 @@ ollama = [
 [project.scripts]
 rlm-kb = "src.main:main"
 rlm-mcp = "src.mcp_server:main"
+rlm-mcp-http = "src.mcp_http_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]

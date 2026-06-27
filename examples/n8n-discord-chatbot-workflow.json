@@ -1,0 +1,268 @@
+{
+  "name": "Discord Unternehmens-Chatbot",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"]
+      },
+      "id": "discord-trigger",
+      "name": "Discord Trigger",
+      "type": "n8n-nodes-base.discordTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "webhookId": "discord-bot-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "filter-bot",
+              "leftValue": "={{ $json.author.bot }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-bots",
+      "name": "Filter Bots",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.content }}",
+        "options": {
+          "systemMessage": "Du bist ein hilfreicher Unternehmens-Assistent. Du kannst:\n\n1. **Wissensbasis durchsuchen**: Nutze die RLM Knowledge Base Tools um Dokumente zu suchen und Informationen zu finden.\n2. **Google Kalender verwalten**: Termine erstellen, anzeigen und Verfuegbarkeit pruefen.\n3. **Google Tasks verwalten**: Aufgaben erstellen, anzeigen, aktualisieren und loeschen.\n\nAntworte immer freundlich und professionell auf Deutsch. Halte Antworten kompakt (max 2000 Zeichen fuer Discord). Wenn du Informationen aus der Wissensbasis nutzt, gib die Quelle an."
+        }
+      },
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-sonnet-4-6"
+        },
+        "options": {
+          "maxTokensToSample": 4096,
+          "temperature": 0.7
+        }
+      },
+      "id": "claude-model",
+      "name": "Anthropic Claude",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [260, 200]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=discord_{{ $('Discord Trigger').item.json.author.id }}"
+      },
+      "id": "postgres-memory",
+      "name": "Postgres Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [380, 200]
+    },
+    {
+      "parameters": {
+        "endpointUrl": "={{ $env.MCP_ENDPOINT_URL || 'https://YOUR-NGROK-URL.ngrok-free.app/mcp' }}",
+        "serverTransport": "httpStreamable",
+        "authentication": "bearerAuth",
+        "include": "all",
+        "toolDescription": "Nutze dieses Tool um die RLM Wissensbasis zu durchsuchen. Verfuegbare Funktionen: search_documents (Volltextsuche), search_fuzzy (Fuzzy-Suche), list_documents (alle Dokumente auflisten), read_document (Dokument lesen), get_statistics (Statistiken)."
+      },
+      "id": "mcp-rlm-tool",
+      "name": "RLM Knowledge Base",
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.2,
+      "position": [500, 200],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "MCP Bearer Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "toolDescription": "Verwende dieses Tool um Google Kalender Events zu verwalten: Termine erstellen, anzeigen, aktualisieren oder loeschen."
+      },
+      "id": "google-calendar-tool",
+      "name": "Google Calendar Tool",
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [620, 200]
+    },
+    {
+      "parameters": {
+        "resource": "task",
+        "toolDescription": "Verwende dieses Tool um Google Tasks zu verwalten: Aufgaben erstellen, anzeigen, aktualisieren oder als erledigt markieren."
+      },
+      "id": "google-tasks-tool",
+      "name": "Google Tasks Tool",
+      "type": "n8n-nodes-base.googleTasksTool",
+      "typeVersion": 1,
+      "position": [740, 200]
+    },
+    {
+      "parameters": {
+        "content": "={{ $json.output.substring(0, 2000) }}",
+        "options": {
+          "replyToMessageId": "={{ $('Discord Trigger').item.json.id }}"
+        }
+      },
+      "id": "discord-send",
+      "name": "Discord Send",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "credentials": {
+        "discordBotApi": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "Discord Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Entschuldigung, es ist ein Fehler aufgetreten. Bitte versuche es erneut.",
+        "options": {
+          "replyToMessageId": "={{ $('Discord Trigger').item.json.id }}"
+        }
+      },
+      "id": "discord-error",
+      "name": "Discord Error",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [660, 160],
+      "credentials": {
+        "discordBotApi": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "Discord Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Discord Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filter Bots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Bots": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Discord Send",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Discord Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Claude": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RLM Knowledge Base": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Tasks Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
