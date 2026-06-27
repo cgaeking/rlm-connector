@@ -232,10 +232,16 @@ class SyncManager:
             logger.error(f"Error setting up scheduler: {e}")
 
     async def _scheduled_sync(self) -> None:
-        """Run scheduled sync job."""
+        """Run the scheduled sync in a worker thread.
+
+        Indexing does blocking file/DB work; running it in a separate thread (with
+        its own event loop) keeps the API server's event loop responsive during a sync.
+        """
+        import asyncio
+
         logger.info("Starting scheduled sync")
         try:
-            await self.incremental_sync()
+            await asyncio.to_thread(lambda: asyncio.run(self.incremental_sync()))
         except Exception as e:
             logger.error(f"Scheduled sync failed: {e}")
 
