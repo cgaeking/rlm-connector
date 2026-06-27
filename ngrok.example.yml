@@ -1,0 +1,23 @@
+# ngrok Configuration for RLM Knowledge Base  (EXAMPLE – copy to ngrok.yml)
+#
+# SETUP:
+# 1. Log in at ngrok.com and open "Domains"
+# 2. Create a free static domain (e.g. your-name-rlm.ngrok-free.app)
+# 3. Copy this file to "ngrok.yml" and fill in your real values
+# 4. Get your authtoken at https://dashboard.ngrok.com/get-started/your-authtoken
+#
+# A static domain means the URL stays the same across restarts,
+# so you only configure it once in your MCP client (e.g. n8n).
+#
+# Free alternatives to ngrok:
+#   - Cloudflare Tunnel (free)
+#   - Tailscale Funnel (free)
+
+version: "2"
+authtoken: "YOUR_NGROK_AUTHTOKEN"
+
+tunnels:
+  rlm-mcp:
+    proto: http
+    addr: 3000
+    domain: YOUR-NGROK-DOMAIN.ngrok-free.app

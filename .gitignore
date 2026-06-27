@@ -39,6 +39,12 @@ config.yaml
 data/
 *.db
 
+# Secrets / local-only ops (NEVER commit – contains ngrok authtoken)
+ngrok.yml
+
+# Vendored Windows service binary (NSSM) – download separately, don't commit
+tools/
+
 # Testing
 .pytest_cache/
 .coverage
