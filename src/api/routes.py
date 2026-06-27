@@ -55,6 +55,7 @@ class LlmConfigBody(BaseModel):
     provider: str = Field("anthropic", description="anthropic | openai | ollama")
     model: str = "claude-sonnet-4-6"
     api_key: str | None = None
+    api_keys: dict[str, str] = Field(default_factory=dict)
     base_url: str | None = None
 
 
@@ -342,6 +343,7 @@ def create_router(app_state: Any) -> APIRouter:
                 provider=cfg.llm.provider,
                 model=cfg.llm.model,
                 api_key=cfg.llm.api_key,
+                api_keys=cfg.llm.api_keys,
                 base_url=cfg.llm.base_url,
             ),
             connectors=[

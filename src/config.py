@@ -14,7 +14,10 @@ class LLMConfig(BaseModel):
     provider: str = "anthropic"
     model: str = "claude-sonnet-4-6"
     base_url: str | None = None
+    # api_keys is the canonical per-provider store; api_key mirrors the active
+    # provider's key for backward compatibility (the engine reads api_key).
     api_key: str | None = None
+    api_keys: dict[str, str] = Field(default_factory=dict)
 
 
 class DatabaseConfig(BaseModel):
@@ -111,9 +114,15 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     else:
         config = AppConfig()
 
-    # Override LLM API key from environment if not in config
-    if settings.anthropic_api_key and not config.llm.api_key:
-        config.llm.api_key = settings.anthropic_api_key
+    # Normalize per-provider keys. Seed from the legacy single api_key and from
+    # environment variables, then expose the active provider's key as api_key.
+    if config.llm.api_key and not config.llm.api_keys.get(config.llm.provider):
+        config.llm.api_keys[config.llm.provider] = config.llm.api_key
+    if settings.anthropic_api_key and not config.llm.api_keys.get("anthropic"):
+        config.llm.api_keys["anthropic"] = settings.anthropic_api_key
+    if settings.openai_api_key and not config.llm.api_keys.get("openai"):
+        config.llm.api_keys["openai"] = settings.openai_api_key
+    config.llm.api_key = config.llm.api_keys.get(config.llm.provider)
 
     return config
 
@@ -147,9 +156,17 @@ def save_config(data: dict, config_path: str | Path | None = None) -> AppConfig:
 
     if "llm" in data and data["llm"] is not None:
         raw.setdefault("llm", {})
-        for key in ("provider", "model", "api_key", "base_url"):
+        for key in ("provider", "model", "base_url"):
             if key in data["llm"]:
                 raw["llm"][key] = data["llm"][key]
+        if data["llm"].get("api_keys") is not None:
+            raw["llm"]["api_keys"] = {k: v for k, v in data["llm"]["api_keys"].items() if v}
+        elif data["llm"].get("api_key"):
+            prov0 = data["llm"].get("provider") or raw["llm"].get("provider", "anthropic")
+            raw["llm"].setdefault("api_keys", {})[prov0] = data["llm"]["api_key"]
+        # Keep the single api_key in sync with the active provider (engine compat).
+        prov = data["llm"].get("provider") or raw["llm"].get("provider", "anthropic")
+        raw["llm"]["api_key"] = (raw["llm"].get("api_keys") or {}).get(prov)
 
     if "connectors" in data and data["connectors"] is not None:
         raw["connectors"] = [
