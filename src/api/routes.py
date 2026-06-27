@@ -204,6 +204,27 @@ def create_router(app_state: Any) -> APIRouter:
             raise HTTPException(status_code=404, detail="Document not found")
         return result
 
+    @router.get("/documents/{doc_id}/path", tags=["Documents"])
+    def get_document_path(doc_id: str):
+        """Resolve a document's absolute path on disk, so the local app can open it.
+
+        The path is resolved through the owning connector, which enforces that it
+        stays within the connector's configured root directory.
+        """
+        doc = app_state.db.get_document(doc_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        connector = app_state.connectors.get(doc.connector_name)
+        if connector is None or not hasattr(connector, "resolve_path"):
+            raise HTTPException(
+                status_code=400, detail="Connector not available for this document"
+            )
+        try:
+            abs_path = connector.resolve_path(doc.file_path)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not resolve path: {e}")
+        return {"doc_id": doc_id, "abs_path": str(abs_path)}
+
     @router.get("/statistics", tags=["Documents"])
     def get_statistics():
         """Get database statistics."""

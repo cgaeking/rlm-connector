@@ -48,6 +48,13 @@ class LocalConnector(BaseConnector):
 
         return resolved
 
+    def resolve_path(self, path: str) -> Path:
+        """Resolve a stored relative document path to its absolute location on disk.
+
+        Raises ``ValueError`` if the resolved path would escape the connector root.
+        """
+        return self._resolve_path(path)
+
     def _get_relative_path(self, absolute_path: Path) -> str:
         """Get relative path from root."""
         return str(absolute_path.relative_to(self.root_path))
