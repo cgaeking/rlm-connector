@@ -660,6 +660,29 @@ class DocumentRepository:
                 for doc in docs
             ]
 
+    def recent_documents(self, limit: int = 20) -> list[dict[str, Any]]:
+        """List the most recently indexed documents (newest first)."""
+        with self._get_session() as session:
+            query = (
+                select(Document)
+                .where(Document.status == "indexed")
+                .order_by(Document.indexed_at.desc())
+                .limit(limit)
+            )
+            docs = session.scalars(query).all()
+            return [
+                {
+                    "doc_id": doc.id,
+                    "file_name": doc.file_name,
+                    "file_path": doc.file_path,
+                    "file_type": doc.file_type,
+                    "size_bytes": doc.size_bytes,
+                    "connector_name": doc.connector_name,
+                    "indexed_at": doc.indexed_at.isoformat() if doc.indexed_at else None,
+                }
+                for doc in docs
+            ]
+
     def count_documents(
         self,
         connector_name: str | None = None,

@@ -290,6 +290,13 @@ def create_router(app_state: Any) -> APIRouter:
         """Get current indexing progress (when running)."""
         return app_state.indexer.progress
 
+    @router.get("/index/recent", tags=["Index"])
+    def get_recent_indexed(
+        limit: int = Query(20, ge=1, le=100, description="Max documents to return"),
+    ):
+        """List the most recently indexed documents (newest first)."""
+        return {"documents": app_state.db.recent_documents(limit)}
+
     # Connector endpoints
 
     @router.get("/connectors", tags=["Connectors"])
