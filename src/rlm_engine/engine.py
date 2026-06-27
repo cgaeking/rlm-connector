@@ -490,6 +490,41 @@ Nach Dateityp:
             "tool_calls": tool_calls_made,
         }
 
+    def generate_title(self, question: str, answer: str | None = None) -> str:
+        """Generate a short conversation title (3-6 words) from the first exchange."""
+        client = self._get_client()
+        provider = self.config.llm.provider
+        model = self.config.llm.model
+
+        snippet = question.strip()[:500]
+        if answer:
+            snippet += "\n\nAntwort: " + answer.strip()[:500]
+        prompt = (
+            "Erzeuge einen sehr kurzen, prägnanten Titel (3-6 Wörter, gleiche "
+            "Sprache wie die Frage, ohne Anführungszeichen, ohne Satzzeichen am "
+            f"Ende) für dieses Gespräch:\n\nFrage: {snippet}"
+        )
+
+        if provider == "anthropic":
+            resp = client.messages.create(
+                model=model,
+                max_tokens=32,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            title = "".join(b.text for b in resp.content if hasattr(b, "text"))
+        elif provider == "openai":
+            resp = client.chat.completions.create(
+                model=model,
+                max_tokens=32,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            title = resp.choices[0].message.content or ""
+        else:
+            raise ValueError(f"Unsupported LLM provider: {provider}")
+
+        title = " ".join(title.strip().strip('"').strip().split())
+        return title[:80]
+
     def _extract_sources(self, tool_calls: list[dict]) -> list[dict[str, Any]]:
         """Extract document references from tool calls."""
         sources = []

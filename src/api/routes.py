@@ -15,6 +15,13 @@ class QueryRequest(BaseModel):
     question: str = Field(..., description="The question to ask")
 
 
+class TitleRequest(BaseModel):
+    """Request body for generating a short conversation title."""
+
+    question: str = Field(..., description="The first user message")
+    answer: str | None = Field(None, description="The first assistant answer (optional)")
+
+
 class QueryResponse(BaseModel):
     """Response for knowledge base queries."""
 
@@ -362,6 +369,15 @@ def create_router(app_state: Any) -> APIRouter:
                 status_code=500,
                 detail=f"Query failed: {str(e)}",
             )
+
+    @router.post("/chat/title", tags=["Chat"])
+    def generate_chat_title(request: TitleRequest):
+        """Generate a short conversation title from the first exchange (uses the LLM)."""
+        try:
+            title = app_state.rlm_engine.generate_title(request.question, request.answer)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not generate title: {e}")
+        return {"title": title}
 
     # Config endpoints (editable subset; changes require a restart)
 
