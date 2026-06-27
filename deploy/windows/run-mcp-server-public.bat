@@ -9,6 +9,10 @@ echo.
 
 cd /d "%~dp0..\.."
 
+REM Prefer the project virtualenv (avoids needing admin / global site-packages).
+set "PYEXE=python"
+if exist ".venv\Scripts\python.exe" set "PYEXE=.venv\Scripts\python.exe"
+
 :: Check if a static domain is configured in ngrok.yml
 if exist "ngrok.yml" (
     findstr /R /C:"^[^#]*domain:.*YOUR-NGROK-DOMAIN" ngrok.yml >nul
@@ -28,7 +32,7 @@ if exist "ngrok.yml" (
 
 :: Start MCP server in the background
 echo [1/2] Starting MCP server on port 3000...
-start "RLM MCP Server" cmd /c "python -m src.mcp_http_server --port 3000"
+start "RLM MCP Server" cmd /c "%PYEXE% -m src.mcp_http_server --port 3000"
 
 :: Give the server a moment to come up
 timeout /t 3 /nobreak > nul

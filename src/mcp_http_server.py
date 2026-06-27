@@ -515,7 +515,12 @@ def create_sync_manager() -> SyncManager:
     connectors = {}
     for conn_config in config.connectors:
         if conn_config.type == "local":
-            connectors[conn_config.name] = LocalConnector(conn_config)
+            connectors[conn_config.name] = LocalConnector(
+                name=conn_config.name,
+                root_path=conn_config.path,
+                include_patterns=conn_config.include,
+                exclude_patterns=conn_config.exclude,
+            )
     
     indexer = Indexer(db, connectors, config)
     return SyncManager(db, connectors, config, indexer)

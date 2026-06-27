@@ -5,4 +5,7 @@ REM For a permanent setup that starts automatically on boot,
 REM use install-as-windows-service.bat instead.
 echo Starting RLM Knowledge Base MCP Server (local: http://localhost:3000) ...
 cd /d "%~dp0..\.."
-python -m src.mcp_http_server %*
+REM Prefer the project virtualenv (avoids needing admin / global site-packages).
+set "PYEXE=python"
+if exist ".venv\Scripts\python.exe" set "PYEXE=.venv\Scripts\python.exe"
+"%PYEXE%" -m src.mcp_http_server %*
