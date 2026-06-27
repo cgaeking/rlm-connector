@@ -290,10 +290,14 @@ def create_router(app_state: Any) -> APIRouter:
                 detail="Sync already in progress",
             )
 
-        # Run sync in background
+        # Run the sync in a worker thread (it does blocking PDF/DB work); running
+        # it directly on the event loop would freeze /health and /status until it
+        # finishes, making the app show "backend unreachable" mid-index.
         if request.full:
             asyncio.create_task(
-                app_state.sync_manager.full_sync(request.connector_name)
+                asyncio.to_thread(
+                    lambda: asyncio.run(app_state.sync_manager.full_sync(request.connector_name))
+                )
             )
             return {
                 "status": "full_sync_started",
@@ -301,7 +305,11 @@ def create_router(app_state: Any) -> APIRouter:
             }
         else:
             asyncio.create_task(
-                app_state.sync_manager.incremental_sync(request.connector_name)
+                asyncio.to_thread(
+                    lambda: asyncio.run(
+                        app_state.sync_manager.incremental_sync(request.connector_name)
+                    )
+                )
             )
             return {
                 "status": "incremental_sync_started",
