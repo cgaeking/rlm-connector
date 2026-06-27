@@ -1,11 +1,29 @@
 """Configuration management for RLM Knowledge Base."""
 
+import os
 from pathlib import Path
 from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
+
+
+def app_home() -> Path:
+    """Base directory for ``config.yaml`` and the ``data/`` folder.
+
+    When ``RLM_HOME`` is set (e.g. by the desktop app, which points it at a
+    per-user app-data folder), config and database live there so an installed
+    app can write outside its read-only program folder. When unset, paths stay
+    relative to the current working directory, preserving the standalone/server
+    behavior.
+    """
+    home = os.environ.get("RLM_HOME")
+    if home:
+        p = Path(home).expanduser()
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    return Path.cwd()
 
 
 class LLMConfig(BaseModel):
@@ -112,13 +130,22 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
         Loaded AppConfig instance.
     """
     settings = Settings()
-    path = Path(config_path or settings.config_path)
+    path = Path(config_path) if config_path else (app_home() / settings.config_path)
 
     data = {}
     if path.exists():
         with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
     config = AppConfig.model_validate(data)
+
+    # Resolve a relative SQLite path under the app home so the database lives
+    # next to the config (matters when RLM_HOME points outside the program dir).
+    if (
+        config.database.type == "sqlite"
+        and config.database.path
+        and not Path(config.database.path).is_absolute()
+    ):
+        config.database.path = str(app_home() / config.database.path)
 
     # Migrate: seed the global include/exclude from existing connector patterns
     # when they are not set explicitly in the file (preserves prior file types).
@@ -163,7 +190,8 @@ def save_config(data: dict, config_path: str | Path | None = None) -> AppConfig:
         The validated :class:`AppConfig`.
     """
     settings = Settings()
-    path = Path(config_path or settings.config_path)
+    path = Path(config_path) if config_path else (app_home() / settings.config_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     # Start from the existing file so untouched sections survive.
     if path.exists():
