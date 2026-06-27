@@ -6,6 +6,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from ..config import get_config, save_config
+
 
 class QueryRequest(BaseModel):
     """Request body for knowledge base queries."""
@@ -45,6 +47,39 @@ class StatusResponse(BaseModel):
     indexed_documents: int
     error_documents: int
     connectors: dict[str, Any]
+
+
+class LlmConfigBody(BaseModel):
+    """Editable LLM settings."""
+
+    provider: str = Field("anthropic", description="anthropic | openai | ollama")
+    model: str = "claude-sonnet-4-6"
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+class ConnectorBody(BaseModel):
+    """Editable connector (indexed folder) settings."""
+
+    name: str
+    type: str = "local"
+    path: str | None = None
+    include: list[str] = Field(default_factory=list)
+    exclude: list[str] = Field(default_factory=list)
+
+
+class IndexerBody(BaseModel):
+    """Editable indexer settings."""
+
+    sync_schedule: str | None = None
+
+
+class ConfigBody(BaseModel):
+    """Editable subset of the application config (for GET/POST /config)."""
+
+    llm: LlmConfigBody
+    connectors: list[ConnectorBody] = Field(default_factory=list)
+    indexer: IndexerBody = Field(default_factory=IndexerBody)
 
 
 def create_router(app_state: Any) -> APIRouter:
@@ -254,5 +289,44 @@ def create_router(app_state: Any) -> APIRouter:
                 status_code=500,
                 detail=f"Query failed: {str(e)}",
             )
+
+    # Config endpoints (editable subset; changes require a restart)
+
+    @router.get("/config", response_model=ConfigBody, tags=["Config"])
+    async def get_config_endpoint():
+        """Return the editable subset of the current configuration."""
+        cfg = get_config()
+        return ConfigBody(
+            llm=LlmConfigBody(
+                provider=cfg.llm.provider,
+                model=cfg.llm.model,
+                api_key=cfg.llm.api_key,
+                base_url=cfg.llm.base_url,
+            ),
+            connectors=[
+                ConnectorBody(
+                    name=c.name,
+                    type=c.type,
+                    path=c.path,
+                    include=c.include,
+                    exclude=c.exclude,
+                )
+                for c in cfg.connectors
+            ],
+            indexer=IndexerBody(sync_schedule=cfg.indexer.sync_schedule),
+        )
+
+    @router.post("/config", tags=["Config"])
+    async def update_config_endpoint(body: ConfigBody):
+        """Persist the editable config to config.yaml.
+
+        Validates and writes the file (with a .bak backup). Does NOT hot-apply:
+        the backend must be restarted for changes to take effect.
+        """
+        try:
+            save_config(body.model_dump())
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid config: {str(e)}")
+        return {"ok": True, "restart_required": True}
 
     return router

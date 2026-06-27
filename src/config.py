@@ -118,6 +118,68 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     return config
 
 
+def save_config(data: dict, config_path: str | Path | None = None) -> AppConfig:
+    """Persist editable config fields to the YAML file.
+
+    Only known, user-editable sections are merged in (``llm``, ``connectors``,
+    and ``indexer.sync_schedule``); all other sections in the file are kept as-is.
+    The merged result is validated against ``AppConfig`` before anything is written,
+    and a ``.bak`` backup of the previous file is created. Changes require a
+    backend restart to take effect (config is loaded once at startup).
+
+    Args:
+        data: Editable config subset, e.g.
+            ``{"llm": {...}, "connectors": [...], "indexer": {"sync_schedule": ...}}``.
+        config_path: Target file. Defaults to the same path as ``load_config``.
+
+    Returns:
+        The validated :class:`AppConfig`.
+    """
+    settings = Settings()
+    path = Path(config_path or settings.config_path)
+
+    # Start from the existing file so untouched sections survive.
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+    else:
+        raw = AppConfig().model_dump(mode="json")
+
+    if "llm" in data and data["llm"] is not None:
+        raw.setdefault("llm", {})
+        for key in ("provider", "model", "api_key", "base_url"):
+            if key in data["llm"]:
+                raw["llm"][key] = data["llm"][key]
+
+    if "connectors" in data and data["connectors"] is not None:
+        raw["connectors"] = [
+            {
+                "name": c["name"],
+                "type": c.get("type", "local"),
+                "path": c.get("path"),
+                "include": c.get("include", []),
+                "exclude": c.get("exclude", []),
+            }
+            for c in data["connectors"]
+        ]
+
+    if "indexer" in data and data["indexer"] is not None and "sync_schedule" in data["indexer"]:
+        raw.setdefault("indexer", {})
+        raw["indexer"]["sync_schedule"] = data["indexer"]["sync_schedule"]
+
+    # Validate the full merged config before touching disk.
+    config = AppConfig.model_validate(raw)
+
+    if path.exists():
+        backup = path.with_suffix(path.suffix + ".bak")
+        backup.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(raw, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+
+    return config
+
+
 def get_settings() -> Settings:
     """Get environment settings."""
     return Settings()
