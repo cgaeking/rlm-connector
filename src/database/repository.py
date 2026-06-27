@@ -667,26 +667,39 @@ class DocumentRepository:
             ]
 
     def recent_documents(self, limit: int = 20) -> list[dict[str, Any]]:
-        """List the most recently indexed documents (newest first)."""
+        """List the most recently indexed documents (newest first).
+
+        Selects only the small metadata columns; loading the full Document
+        entity would also fetch ``content_text`` (the entire extracted document
+        text, often megabytes) for every row, which makes this query very slow.
+        """
         with self._get_session() as session:
             query = (
-                select(Document)
+                select(
+                    Document.id,
+                    Document.file_name,
+                    Document.file_path,
+                    Document.file_type,
+                    Document.size_bytes,
+                    Document.connector_name,
+                    Document.indexed_at,
+                )
                 .where(Document.status == "indexed")
                 .order_by(Document.indexed_at.desc())
                 .limit(limit)
             )
-            docs = session.scalars(query).all()
+            rows = session.execute(query).all()
             return [
                 {
-                    "doc_id": doc.id,
-                    "file_name": doc.file_name,
-                    "file_path": doc.file_path,
-                    "file_type": doc.file_type,
-                    "size_bytes": doc.size_bytes,
-                    "connector_name": doc.connector_name,
-                    "indexed_at": doc.indexed_at.isoformat() if doc.indexed_at else None,
+                    "doc_id": row.id,
+                    "file_name": row.file_name,
+                    "file_path": row.file_path,
+                    "file_type": row.file_type,
+                    "size_bytes": row.size_bytes,
+                    "connector_name": row.connector_name,
+                    "indexed_at": row.indexed_at.isoformat() if row.indexed_at else None,
                 }
-                for doc in docs
+                for row in rows
             ]
 
     def count_documents(
