@@ -60,7 +60,7 @@ function Test-ServiceSafeVenv {
     if (-not (Test-Path $cfgFile)) { return $true }
     $cfg = Get-Content $cfgFile -Raw
     if ($cfg -match "WindowsApps" -or $cfg -match "PythonSoftwareFoundation\.Python") {
-        Write-Host "[!] Project venv uses Microsoft Store Python — not service-safe." -ForegroundColor Yellow
+        Write-Host "[!] Project venv uses Microsoft Store Python - not service-safe." -ForegroundColor Yellow
         return $false
     }
     return $true
