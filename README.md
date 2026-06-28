@@ -74,7 +74,7 @@ ANTHROPIC_API_KEY=sk-ant-api03-...
 ```yaml
 llm:
   provider: anthropic
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-6
 
 connectors:
   - name: meine_dokumente
@@ -244,6 +244,39 @@ python -m src.main index
 python -m src.main index --full  # Force Re-Index
 ```
 
+## Als Hintergrund-Dienst betreiben (Windows)
+
+Der Connector ist das **eigenständige Backend** und läuft typischerweise als
+Windows-Dienst, der **dauerhaft im Hintergrund indiziert** – unabhängig davon,
+ob eine App geöffnet ist. Konfiguriert wird weiterhin über die `config.yaml` im
+Projektverzeichnis (oder bequem über die Desktop-App, die per REST-API in
+dieselbe Datei schreibt).
+
+`deploy/windows/` enthält Ein-Klick-Installer (Doppelklick genügt, fragt
+automatisch nach Admin-Rechten):
+
+| Datei                              | Zweck                                                                                                                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `install-api-service.bat`          | Installiert die **REST-API** (`127.0.0.1:8000`) als Dienst `RLM-API` – das Backend für die RootMind Desktop-App. Erkennt den MCP-Dienst und installiert dann ohne eigenen Indexer (kein Doppel-Indizieren). |
+| `install-as-windows-service.bat`   | Installiert den **MCP-Server** (Port 3000) als Dienst (für n8n / Claude / Sam), inkl. optionalem ngrok-Tunnel.                                                                       |
+
+Verwalten: `powershell -File deploy/windows/_service-api.ps1 -Status` (bzw.
+`-Start` / `-Stop` / `-Uninstall`). Vordergrund zum Testen:
+`deploy/windows/run-api-server.bat`.
+
+> Indizierung soll nur **einmal** laufen: Wer den MCP-Dienst nutzt (der bereits
+> indiziert), installiert die REST-API mit `-NoIndex` (macht die `.bat`
+> automatisch). Andernfalls indiziert der REST-API-Dienst selbst.
+
+## RootMind Desktop-App
+
+[**RootMind**](https://github.com/cgaeking/rlm-desktop) ist die optionale
+Windows-Desktop-App (Tauri) als komfortables Front-End: Ordner konfigurieren,
+Index-Status sehen, mit den Dokumenten chatten (inkl. anklickbarer Quellen) und
+Chat-Verlauf. Sie ist ein **reiner Client** der REST-API – sie startet oder
+verwaltet das Backend **nicht**. Voraussetzung ist ein laufender Connector
+(REST-API-Dienst auf `127.0.0.1:8000`).
+
 ## Aktuelle Features
 
 - [X] Lokales Dateisystem indexieren
@@ -256,6 +289,8 @@ python -m src.main index --full  # Force Re-Index
 - [X] **MCP Server** für Claude Desktop Integration
 - [X] Inkrementelles Indexieren (Hash-basiert)
 - [X] WAL-Mode für bessere DB-Performance
+- [X] Hintergrund-Indizierung via Windows-Dienst (auto-start)
+- [X] **RootMind** Desktop-App (Tauri) als REST-Client
 
 ## MCP Server (Claude Desktop Integration)
 
@@ -331,4 +366,4 @@ python -m src.mcp_server
 ---
 
 *Projekt-Pfad: `C:\Users\chris\Documents\MyProjects\rlm-connector`*
-*Stand: Januar 2025*
+*Stand: Juni 2026*
