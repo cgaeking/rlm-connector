@@ -1,5 +1,6 @@
 """FastAPI application factory."""
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -93,8 +94,14 @@ async def lifespan(app: FastAPI):
         config=config,
     )
 
-    # Setup scheduler if configured
-    app_state.sync_manager.setup_scheduler()
+    # Setup the background indexing scheduler, unless disabled. Set
+    # RLM_DISABLE_SCHEDULER=1 to run this API process for serving only (e.g. a
+    # REST API next to an MCP service that already owns indexing), so the same
+    # files aren't indexed twice.
+    if os.environ.get("RLM_DISABLE_SCHEDULER"):
+        print("Scheduler disabled (RLM_DISABLE_SCHEDULER set) — serving only, no indexing")
+    else:
+        app_state.sync_manager.setup_scheduler()
 
     print(f"RLM Knowledge Base started with {len(app_state.connectors)} connector(s)")
 
