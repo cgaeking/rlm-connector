@@ -36,7 +36,10 @@ class SearchRequest(BaseModel):
 
     query: str = Field(..., description="Search query")
     file_type: str | None = Field(None, description="Filter by file type")
-    limit: int = Field(20, description="Maximum results")
+    limit: int = Field(20, ge=1, le=1000, description="Maximum results")
+    with_snippets: bool = Field(
+        False, description="Include content snippets (slower; scans document text)"
+    )
 
 
 class SyncRequest(BaseModel):
@@ -246,7 +249,7 @@ def create_router(app_state: Any) -> APIRouter:
             query=request.query,
             limit=request.limit,
             file_type=request.file_type,
-            with_snippets=False,
+            with_snippets=request.with_snippets,
         )
 
         return {
