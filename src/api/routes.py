@@ -246,6 +246,7 @@ def create_router(app_state: Any) -> APIRouter:
             query=request.query,
             limit=request.limit,
             file_type=request.file_type,
+            with_snippets=False,
         )
 
         return {
@@ -265,6 +266,7 @@ def create_router(app_state: Any) -> APIRouter:
             query=q,
             limit=limit,
             file_type=file_type,
+            with_snippets=False,
         )
 
         return {

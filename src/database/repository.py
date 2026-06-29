@@ -310,12 +310,43 @@ class DocumentRepository:
 
             return count
 
+    def _document_meta(self, doc_id: str) -> dict[str, Any] | None:
+        """Lightweight document metadata (no content_text) for search results.
+
+        Loading the full Document entity pulls in content_text (often megabytes),
+        which makes search very slow when done per match.
+        """
+        with self._get_session() as session:
+            row = session.execute(
+                select(
+                    Document.file_name,
+                    Document.file_path,
+                    Document.file_type,
+                    Document.connector_name,
+                    Document.status,
+                    Document.content_length,
+                    Document.page_count,
+                ).where(Document.id == doc_id)
+            ).first()
+        if not row:
+            return None
+        return {
+            "file_name": row.file_name,
+            "file_path": row.file_path,
+            "file_type": row.file_type,
+            "connector_name": row.connector_name,
+            "status": row.status,
+            "content_length": row.content_length,
+            "page_count": row.page_count,
+        }
+
     def search_fulltext(
         self,
         query: str,
         limit: int = 20,
         connector_name: str | None = None,
         file_type: str | None = None,
+        with_snippets: bool = True,
     ) -> list[dict[str, Any]]:
         """Full-text search using FTS5 with multi-strategy approach.
 
@@ -325,7 +356,9 @@ class DocumentRepository:
         3. OR search for partial matches
         4. Filename search as fallback
 
-        Returns documents with matching snippets and highlights, sorted by relevance.
+        ``with_snippets=False`` skips the FTS5 snippet() highlight, which scans
+        the (often huge) document content and dominates the query time — use it
+        when only the result list is needed.
         """
         # Escape special FTS5 characters, keep umlauts
         safe_query = re.sub(r'[^\w\s\-äöüÄÖÜß]', ' ', query)
@@ -334,17 +367,28 @@ class DocumentRepository:
         if not search_terms:
             return []
 
+        # snippet() over the large content column is the slow part; make it
+        # optional. Column 2 = content, column 1 = file_name.
+        snip = "snippet(documents_fts, 2, '>>>', '<<<', '...', 64)" if with_snippets else "''"
+        snip_fn = "snippet(documents_fts, 1, '>>>', '<<<', '...', 64)" if with_snippets else "''"
+
         # Collect results from multiple strategies with different weights
         all_results: dict[str, dict[str, Any]] = {}  # doc_id -> result
+        meta_cache: dict[str, dict[str, Any] | None] = {}
+
+        def get_meta(doc_id: str) -> dict[str, Any] | None:
+            if doc_id not in meta_cache:
+                meta_cache[doc_id] = self._document_meta(doc_id)
+            return meta_cache[doc_id]
 
         def add_result(doc_id: str, snippet: str, base_score: float, weight: float):
             """Add or update result with weighted score."""
-            doc = self.get_document(doc_id)
-            if not doc or doc.status != "indexed":
+            meta = get_meta(doc_id)
+            if not meta or meta["status"] != "indexed":
                 return
-            if connector_name and doc.connector_name != connector_name:
+            if connector_name and meta["connector_name"] != connector_name:
                 return
-            if file_type and doc.file_type != file_type:
+            if file_type and meta["file_type"] != file_type:
                 return
 
             weighted_score = abs(base_score) * weight
@@ -357,13 +401,13 @@ class DocumentRepository:
             else:
                 all_results[doc_id] = {
                     "doc_id": doc_id,
-                    "file_name": doc.file_name,
-                    "file_path": doc.file_path,
-                    "file_type": doc.file_type,
+                    "file_name": meta["file_name"],
+                    "file_path": meta["file_path"],
+                    "file_type": meta["file_type"],
                     "snippet": snippet.replace(">>>", "**").replace("<<<", "**"),
                     "score": weighted_score,
-                    "content_length": doc.content_length,
-                    "page_count": doc.page_count,
+                    "content_length": meta["content_length"],
+                    "page_count": meta["page_count"],
                 }
 
         with self.engine.connect() as conn:
@@ -372,8 +416,8 @@ class DocumentRepository:
                 phrase_query = '"' + ' '.join(search_terms) + '"'
                 try:
                     result = conn.execute(
-                        text("""
-                            SELECT doc_id, snippet(documents_fts, 2, '>>>', '<<<', '...', 64), bm25(documents_fts)
+                        text(f"""
+                            SELECT doc_id, {snip}, bm25(documents_fts)
                             FROM documents_fts WHERE documents_fts MATCH :query
                             ORDER BY bm25(documents_fts) LIMIT :limit
                         """),
@@ -388,8 +432,8 @@ class DocumentRepository:
             and_query = " AND ".join(f'"{term}"' for term in search_terms)
             try:
                 result = conn.execute(
-                    text("""
-                        SELECT doc_id, snippet(documents_fts, 2, '>>>', '<<<', '...', 64), bm25(documents_fts)
+                    text(f"""
+                        SELECT doc_id, {snip}, bm25(documents_fts)
                         FROM documents_fts WHERE documents_fts MATCH :query
                         ORDER BY bm25(documents_fts) LIMIT :limit
                     """),
@@ -404,8 +448,8 @@ class DocumentRepository:
             prefix_and_query = " AND ".join(f'{term}*' for term in search_terms)
             try:
                 result = conn.execute(
-                    text("""
-                        SELECT doc_id, snippet(documents_fts, 2, '>>>', '<<<', '...', 64), bm25(documents_fts)
+                    text(f"""
+                        SELECT doc_id, {snip}, bm25(documents_fts)
                         FROM documents_fts WHERE documents_fts MATCH :query
                         ORDER BY bm25(documents_fts) LIMIT :limit
                     """),
@@ -420,8 +464,8 @@ class DocumentRepository:
             prefix_or_query = " OR ".join(f'{term}*' for term in search_terms)
             try:
                 result = conn.execute(
-                    text("""
-                        SELECT doc_id, snippet(documents_fts, 2, '>>>', '<<<', '...', 64), bm25(documents_fts)
+                    text(f"""
+                        SELECT doc_id, {snip}, bm25(documents_fts)
                         FROM documents_fts WHERE documents_fts MATCH :query
                         ORDER BY bm25(documents_fts) LIMIT :limit
                     """),
@@ -436,8 +480,8 @@ class DocumentRepository:
             for term in search_terms:
                 try:
                     result = conn.execute(
-                        text("""
-                            SELECT doc_id, snippet(documents_fts, 1, '>>>', '<<<', '...', 64), bm25(documents_fts)
+                        text(f"""
+                            SELECT doc_id, {snip_fn}, bm25(documents_fts)
                             FROM documents_fts WHERE file_name MATCH :query
                             ORDER BY bm25(documents_fts) LIMIT :limit
                         """),
