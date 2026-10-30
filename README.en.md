@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> This project is no longer maintained. It is continued in its successor project [RootMind](https://github.com/cgaeking/rootmind).
+
 # RLM Knowledge Base
 
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
