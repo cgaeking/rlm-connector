@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> This project is no longer maintained. It is continued in its successor project [RootMind](https://github.com/cgaeking/rootmind).
+> **Note:** This project is no longer maintained. It is continued in its successor project [RootMind](https://github.com/cgaeking/rootmind).
 
 # RLM Knowledge Base
 
